@@ -113,3 +113,78 @@ bootstrap_results |>
   knitr::kable(digits = 4)
 ```
 
+# Problem 2
+
+Create a `city_state` variable and a binary variable indicating whether the homicide is solved. Omit cities that don't report victim race and Tulsa, AL (data entry mistake). Limit analysis to those for whom `victim_race` is `white` or `black`. Be sure `victim_age` is numeric.
+
+```{r}
+homicide_df = 
+  read_csv("homicide-data.csv", na = c("", "NA", "Unknown")) |>
+  mutate(
+    city_state = str_c(city, state, sep = ", "),
+    victim_age = as.numeric(victim_age),
+    resolution = case_when(
+      disposition == "Closed without arrest" ~ 0,
+      disposition == "Open/No arrest"        ~ 0,
+      disposition == "Closed by arrest"      ~ 1)
+  ) |> 
+  filter(victim_race %in% c("White", "Black")) |> 
+  filter(!(city_state %in% c("Tulsa, AL", "Dallas, TX", "Phoenix, AZ", "Kansas City, MO"))) |> 
+  select(city_state, resolution, victim_age, victim_sex, victim_race)
+```
+
+For Baltimore, MD, use the `glm` function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex, and race as predictors. Obtain the estimate and CI of the adjusted **odds ratio** for solving homicides comparing male victims to female victims keeping all other variables fixed. 
+
+```{r}
+baltimore_glm = 
+  filter(homicide_df, city_state == "Baltimore, MD") |> 
+  glm(resolution ~ victim_age + victim_sex + victim_race, family = binomial(), data = _)
+
+baltimore_glm |> 
+  broom::tidy() |> 
+  mutate(
+    odds_ratio = exp(estimate), 
+    ci_upper_odds_ratio = exp(estimate + 1.96 * std.error),
+    ci_lower_odds_ratio = exp(estimate - 1.96 * std.error)) |>
+  filter(term == "victim_sexMale") |> 
+  select(odds_ratio, ci_lower_odds_ratio, ci_upper_odds_ratio) |>
+  knitr::kable(digits = 3)
+```
+
+Run `glm` for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing male victims to female victims. Create a dataframe with estimated ORs and CIs for each city.
+
+```{r}
+allcities_results = 
+  homicide_df |> 
+  nest(data = -city_state) |> 
+  mutate(
+    models = map(data, \(df) glm(resolution ~ victim_age + victim_sex + victim_race, 
+                             family = binomial(), data = df)),
+  tidy_models = map(models, broom::tidy)) |> 
+  select(-models, -data) |> 
+  unnest(cols = tidy_models) |> 
+  mutate(
+    odds_ratio = exp(estimate), 
+    ci_upper_odds_ratio = exp(estimate + 1.96 * std.error),
+    ci_lower_odds_ratio = exp(estimate - 1.96 * std.error)) |> 
+  filter(term == "victim_sexMale") |> 
+  select(city_state, odds_ratio, ci_lower_odds_ratio, ci_upper_odds_ratio)
+
+allcities_results |>
+  knitr::kable(digits = 3)
+```
+
+Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR.
+
+```{r}
+allcities_results |> 
+  mutate(city_state = fct_reorder(city_state, odds_ratio)) |> 
+  ggplot(aes(x = city_state, y = odds_ratio)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = ci_lower_odds_ratio, ymax = ci_upper_odds_ratio)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Nearly all cities have odds ratios that are less than 1. This suggests that crimes with male victims hold smaller odds of resolution compared to crimes with female victims, adjusting for victim age and race. Half of the cities have narrow CI that do not contain 1. This suggests a signficant difference in resolution rates by sex after adjustment for victim age and race. 
+
+
