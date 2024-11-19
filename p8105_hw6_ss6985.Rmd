@@ -188,3 +188,49 @@ allcities_results |>
 Nearly all cities have odds ratios that are less than 1. This suggests that crimes with male victims hold smaller odds of resolution compared to crimes with female victims, adjusting for victim age and race. Half of the cities have narrow CI that do not contain 1. This suggests a signficant difference in resolution rates by sex after adjustment for victim age and race. 
 
 
+# Problem 3
+
+Load and clean the data for regression analysis. 
+
+```{r}
+birthweight_df = 
+  read_csv("birthweight.csv", na = c("", "NA", "Unknown")) |>
+  janitor::clean_names() |>
+  mutate(babysex = as.factor(babysex),
+         frace = as.factor(frace),
+         malform = as.factor(malform),
+         mrace = as.factor(mrace))
+
+sum(is.na(birthweight_df))
+```
+
+A regression model for birthweight:. Plot of model residuals against fitted values. 
+
+```{r}
+bwt_model = lm(bwt ~ gaweeks + ppwt + momage + smoken + wtgain + ppbmi, data = birthweight_df)
+summary(bwt_model)
+```
+
+Describe modeling process:
+
+Plot of model residuals against fitted values.
+
+```{r}
+birthweight_df |>
+  modelr::add_predictions(bwt_model) |> 
+  modelr::add_residuals(bwt_model) |> 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() + 
+  labs(title = "Residuals vs. Fitted Values",
+       x = "Fitted Values",
+       y = "Residuals") 
+```
+
+Comparing original model to 2 others:
+
+```{r}
+
+```
+
+
+
